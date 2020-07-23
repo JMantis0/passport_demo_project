@@ -16,6 +16,7 @@ module.exports = function(app) {
 
   app.get("/login", function(req, res) {
     // If the user already has an account send them to the members page
+    console.log(req.user, "html-routes.js ***19***")
     if (req.user) {
       res.redirect("/members");
     }
@@ -25,7 +26,12 @@ module.exports = function(app) {
   // Here we've add our isAuthenticated middleware to this route.
   // If a user who is not logged in tries to access this route they will be redirected to the signup page
   app.get("/members", isAuthenticated, function(req, res) {
+    console.log(req.user, "html-routes.js ***29***")
     res.sendFile(path.join(__dirname, "../public/members.html"));
   });
+
+  app.get("/passwordRecovery", (req, res) => {
+    
+  })
 
 };

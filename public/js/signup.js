@@ -36,7 +36,8 @@ $(document).ready(function() {
   }
 
   function handleLoginErr(err) {
-    $("#alert .msg").text(err.responseJSON);
+    // console.log("**signup.js 39**", err, "err.responseJSON.fields.users.email",err.responseJSON.fields.users);
+    $("#alert .msg").text(`Account for ${err.responseJSON.errors[0].instance.email} already exists`);
     $("#alert").fadeIn(500);
   }
 });

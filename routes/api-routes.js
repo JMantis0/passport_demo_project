@@ -1,12 +1,14 @@
 // Requiring our models and passport as we've configured it
 var db = require("../models");
 var passport = require("../config/passport");
+var isAuthenticated = require("../config/middleware/isAuthenticated");
 
 module.exports = function(app) {
   // Using the passport.authenticate middleware with our local strategy.
   // If the user has valid login credentials, send them to the members page.
   // Otherwise the user will be sent an error
   app.post("/api/login", passport.authenticate("local"), function(req, res) {
+    console.log(req.user)
     res.json(req.user);
   });
 
@@ -16,7 +18,9 @@ module.exports = function(app) {
   app.post("/api/signup", function(req, res) {
     db.User.create({
       email: req.body.email,
-      password: req.body.password
+      password: req.body.password,
+      recoveryQuestion: null,
+      recoveryAnswer: null
     })
       .then(function() {
         res.redirect(307, "/api/login");
@@ -46,4 +50,25 @@ module.exports = function(app) {
       });
     }
   });
+
+  //  route to handle an update for user's password recovery info
+  app.put("/api/members/passwordRecovery", isAuthenticated, (req, res) => {
+    db.User.update(
+      req.body,
+      {
+        where: {
+          id: req.user.id
+        }
+      }
+    ).then(() => {
+      // send success status back to client
+      res.status(200).send("Password Recovery info Updated");
+    }).catch((err) => {
+      console.log("Error updating Password Recovery info", err);
+      // Send Failure
+      res.status(400).send("Failure");
+    });
+
+  })
+
 };
