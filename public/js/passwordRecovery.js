@@ -1,29 +1,25 @@
-$(document).ready(function() {
+$(document).ready(() => {
   // This file just does a GET request to figure out which user is logged in
   // and updates the HTML on the page
-  $.get("/api/user_data").then(function(data) {
-    $(".member-name").text(data.email);
-  });
 
-  $("form.passwordRecovery").on("submit", (event) => {
+  $("form.accountSearch").on("submit", (event) => {
     event.preventDefault();
-    const recoveryQuestion = $("#passwordRecoverySelect").find(":selected").text();
-    const recoveryAnswer = $("#passwordRecoveryAnswerInput").val();
-
-    const passwordInfo = {
-      recoveryQuestion,
-      recoveryAnswer
-    }
-
+    const searchForThisEmail = $("#email-input").val().trim();
     //  update the current user's password question and answer
-    $.ajax(
-      {
-        url: "/api/members/passwordRecovery",
-        type: "PUT",
-        data: passwordInfo
-      }).then(result => {
-      console.log(result);
-    });
+    $.post("/api/members/passwordRecovery/searchForAccount", {
+      email: searchForThisEmail
+    })
+      .then((result) => {
+        console.log(result);
+        $("#alert").hide();
+      })
+      .catch(handleLoginErr);
   });
+
+  function handleLoginErr(err) {
+    // console.log("**signup.js 39**", err, "err.responseJSON.fields.users.email",err.responseJSON.fields.users);
+    $("#alert .msg").text("Account does not exist");
+    $("#alert").fadeIn(500);
+  }
+
 });
-  
