@@ -69,18 +69,31 @@ module.exports = function (app) {
       });
   });
 
-  app.post("/api/members/passwordRecovery/searchForAccount", (req, res) => {
-    console.log(req.body, "Line 73 api-routes.js");
+  app.post("/api/passwordRecovery/searchForAccount", (req, res) => {
     db.User.findOne({
       where: {
         email: req.body.email
       }
     })
-      .then((result) => {
-        res.send(result.recoveryQuestion);
+      .then((accountIfExists) => {
+        res.send(accountIfExists.dataValues.recoveryQuestion);
       })
       .catch((err) => {
         res.status(400).json(err);
       });
+  });
+
+  app.post("/api/passwordRecovery/matchAnswer", (req, res) => {
+    console.log(req.body, "api routes line 87 ");
+    //Find the user by email,
+    // then find the answer,
+    // then see if answer req.body matches
+    db.User.findOne({
+      where: {
+        email
+      }
+    });
+    //
+    res.send("sent from api-routes line 95");
   });
 };

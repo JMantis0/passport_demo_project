@@ -41,6 +41,6 @@ $(document).ready(() => {
       `Account for ${err.responseJSON.errors[0].instance.email} already exists`
     );
     $("#alert").fadeIn(500);
-    console.log(err)
+    console.log(err);
   }
 });
