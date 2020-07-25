@@ -84,16 +84,31 @@ module.exports = function (app) {
   });
 
   app.post("/api/passwordRecovery/matchAnswer", (req, res) => {
-    console.log(req.body, "api routes line 87 ");
+    let recoveryAnswerValidated;
     //Find the user by email,
     // then find the answer,
     // then see if answer req.body matches
     db.User.findOne({
       where: {
-        email
+        email: req.body.email
       }
-    });
+    })
+      .then((user) => {
+        console.log(user.dataValues.recoveryAnswer, "api routes 95");
+        if (req.body.recoveryAnswer === user.dataValues.recoveryAnswer) {
+          console.log(true, "right answer");
+          recoveryAnswerValidated = true;
+        } else {
+          console.log(false, "wrong answer");
+          recoveryAnswerValidated = false;
+        }
+        res.send(recoveryAnswerValidated);
+      })
+      .catch((err) => {
+        console.log(err);
+        res.json(err);
+      });
     //
-    res.send("sent from api-routes line 95");
+    
   });
 };

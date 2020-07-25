@@ -1,6 +1,7 @@
 $(document).ready(() => {
   // This file just does a GET request to figure out which user is logged in
   // and updates the HTML on the page
+  const alert = $("#alert");
 
   $("form.accountSearch").on("submit", (event) => {
     event.preventDefault();
@@ -11,7 +12,7 @@ $(document).ready(() => {
     })
       .then((recoveryQuestion) => {
         console.log(recoveryQuestion);
-        $("#alert").hide();
+        alert.hide();
         const answerSearchForm = $("<form>");
         const formGroup = $("<div>");
         const recoveryAnswerInputLabel = $("<label>");
@@ -31,6 +32,7 @@ $(document).ready(() => {
         formGroup.append(recoveryAnswerInputLabel);
         formGroup.append(recoveryAnswerInput);
         answerSearchForm.append(formGroup);
+        answerSearchForm.append(alert);
         answerSearchForm.append(recoveryAnswerButton);
         answerSearchForm.appendTo($("form.accountSearch").parent());
         $("form.accountSearch button").hide();
@@ -44,11 +46,21 @@ $(document).ready(() => {
           //  also want to send the email.
           // send the answer to the backend to see if the use answer matches the answer in the database
           $.post("/api/passwordRecovery/matchAnswer", {
+            email: searchForThisEmail,
             recoveryAnswer: answerSubmission
-          }).then((recoveryAnswer) => {
+          }).then((answerResult) => {
+            alert.hide();
             //Possibilities :  Answer matched!  ask user to set a new password
             //              :  Answer didn't match!  Alert incorrect answer
-            console.log(recoveryAnswer);
+            console.log(answerResult);
+            if (answerResult) {
+              console.log("append password reset form");
+            } else {
+              console.log("inside else 57 apiroutes");
+              alert.hide();
+              alert.text("Incorrect answer");
+              alert.fadeIn(500);
+            }
           });
         });
       })
