@@ -2,6 +2,7 @@
 const db = require("../models");
 const passport = require("../config/passport");
 const isAuthenticated = require("../config/middleware/isAuthenticated");
+const bcrypt = require("bcryptjs");
 
 module.exports = function (app) {
   // Using the passport.authenticate middleware with our local strategy.
@@ -69,46 +70,111 @@ module.exports = function (app) {
       });
   });
 
-  app.post("/api/passwordRecovery/searchForAccount", (req, res) => {
+  // Route helps unauthenticated user reset a password.
+  // req.body contains an email account string.
+  // req.body.email is used in the sequelize where condition.
+  // then either a recoveryQuestion is sent back to the client
+  // an exception is thrown.
+  app.post("/api/passwordRecovery/accountSearch", (req, res) => {
+    console.log("Inside api route /accountSearch");
     db.User.findOne({
       where: {
         email: req.body.email
       }
     })
       .then((accountIfExists) => {
-        res.send(accountIfExists.dataValues.recoveryQuestion);
+        let accountExists;
+        if (accountIfExists === null) {
+          accountExists = false;
+        } else {
+          accountExists = true;
+        }
+
+        if (accountExists) {
+          res.status(200).send(accountIfExists.dataValues.recoveryQuestion);
+        } else {
+          throw {
+            msg: ` Account does not exist for ${req.body.email}`,
+            class: "accountSearch"
+          };
+        }
       })
       .catch((err) => {
+        console.log(err, "101");
         res.status(400).json(err);
       });
   });
 
   app.post("/api/passwordRecovery/matchAnswer", (req, res) => {
-    let recoveryAnswerValidated;
-    //Find the user by email,
-    // then find the answer,
-    // then see if answer req.body matches
     db.User.findOne({
       where: {
         email: req.body.email
       }
     })
       .then((user) => {
-        console.log(user.dataValues.recoveryAnswer, "api routes 95");
-        if (req.body.recoveryAnswer === user.dataValues.recoveryAnswer) {
-          console.log(true, "right answer");
-          recoveryAnswerValidated = true;
+        const userAnswer = req.body.recoveryAnswer;
+        const correctAnswer = user.dataValues.recoveryAnswer;
+        if (userAnswer === correctAnswer) {
+          res.send(userAnswer === correctAnswer);
         } else {
-          console.log(false, "wrong answer");
-          recoveryAnswerValidated = false;
+          throw {
+            msg: " Incorrect Answer",
+            class: "recoveryAnswer"
+          };
         }
-        res.send(recoveryAnswerValidated);
       })
       .catch((err) => {
-        console.log(err);
-        res.json(err);
+        res.status(400).json(err);
       });
-    //
-    
+  });
+
+  app.post("/api/passwordRecovery/testPasswordRequirements", (req, res) => {
+    //  Regular Expression must contain at least one number, one capital letter, one lowercase letter,
+    //  one special character, and have length in range 9-32
+    const pwRegEx = new RegExp(
+      "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[+!@#$%^&*])(?=.{8,})"
+    );
+    console.log("135", pwRegEx, req.body.potentialPassword);
+    const passwordPasses = pwRegEx.test(req.body.potentialPassword);
+    console.log("137", passwordPasses);
+    if (passwordPasses) {
+      res.status(200).send(passwordPasses);
+    } else {
+      const err = {
+        msg:
+          " Password must have:\n    - minimum 8 characters\n    - one number\n    - one lowercase letter\n    - one uppercase letter\n    - one special-character",
+        class: "newPassword"
+      };
+      res.status(400).json(err);
+    }
+  });
+
+  app.put("/api/passwordRecovery/confirmPassword", (req, res) => {
+    const match = req.body.password1 === req.body.password2;
+    if (match) {
+      db.User.update(
+        {
+          password: bcrypt.hashSync(
+            req.body.password1,
+            bcrypt.genSaltSync(10),
+            null
+          )
+        },
+        {
+          where: {
+            email: req.body.email
+          }
+        }
+      ).then((result) => {
+        console.log(result, "api routes 161");
+        res.status(202).send(result);
+      });
+    } else {
+      const err = {
+        msg: " Your new passwords do not match",
+        class: "passwordConfirm"
+      };
+      res.status(400).json(err);
+    }
   });
 };

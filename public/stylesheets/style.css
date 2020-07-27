@@ -3,3 +3,7 @@ form.login,
 form.accountSearch {
   margin-top: 50px;
 }
+
+.alert {
+  white-space: pre-wrap;
+}
