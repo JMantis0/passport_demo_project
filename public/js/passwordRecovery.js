@@ -1,14 +1,44 @@
 $(document).ready(() => {
-  const mother = $("#mother");
-  //  Builds a bootstrap form with a label, input, button, and a hidden alert.
-  function createForm(
+  const page = $("#mother");
+  let account;
+  //  Objects is designed for use as arguments for function createInputForm.
+  const accountSearchFormData = {
+    formName: "accountSearch",
+    labelString: "Email address",
+    placeholderString: "Email",
+    inputType: "email",
+    buttonString: "Recover Password"
+  };
+  const recoveryAnswerFormData = {
+    formName: "recoveryAnswer",
+    labelString: "",
+    placeholderString: "Your Answer",
+    inputType: "password",
+    buttonString: "Submit Answer"
+  };
+  const newPasswordFormData = {
+    formName: "newPassword",
+    labelString: "Enter new password",
+    placeholderString: "New password",
+    inputType: "password",
+    buttonString: "Reset Password"
+  };
+  const passwordConfirmFormData = {
+    formName: "passwordConfirm",
+    labelString: "Re-enter new password.",
+    placeholderString: "Confirm new password",
+    inputType: "password",
+    buttonString: "Reset Password"
+  };
+
+  function createInputForm(
     formName,
     labelString,
     placeholderString,
     inputType,
     buttonString
   ) {
-    //  Element Creation
+    //  create form elements
     const form = $("<form>");
     const formGroup = $("<div>");
     const inputLabel = $("<label>");
@@ -19,7 +49,7 @@ $(document).ready(() => {
     const alertMessage = $("<span>)");
     const button = $("<button>");
 
-    //  Attribute assignments
+    //  assign attributes
     form.addClass(formName);
     form.attr("id", formName);
     form.attr(`data-${formName}`);
@@ -56,7 +86,7 @@ $(document).ready(() => {
     button.attr("type", "submit");
     button.text(`${buttonString}`);
 
-    //  Appendages
+    //  Append elements into a form component.
     alert.append(alertGlyph);
     alert.append(alertError);
     alert.append(alertMessage);
@@ -68,150 +98,146 @@ $(document).ready(() => {
     form.append(alert);
     form.append(button);
 
-    //  give same dataAttribute to all elements in the form
-    $(`.${formName}`).attr(`data-${formName}`, `${formName}`);
+    $(`.${formName} *`).attr(`data-${formName}`, `${formName}`);
     return form;
   }
-
-  //  Object is designed for use as arguments for function createForm
-  const accountSearchFormData = {
-    formName: "accountSearch",
-    labelString: "Email address",
-    placeholderString: "Email",
-    inputType: "email",
-    buttonString: "Recover Password"
-  };
-  const recoveryAnswerFormData = {
-    formName: "recoveryAnswer",
-    labelString: "",
-    placeholderString: "Your Answer",
-    inputType: "password",
-    buttonString: "Submit Answer"
-  };
-  const newPasswordFormData = {
-    formName: "newPassword",
-    labelString: "Enter new password",
-    placeholderString: "New password",
-    inputType: "password",
-    buttonString: "Reset Password"
-  };
-  const passwordConfirmFormData = {
-    formName: "passwordConfirm",
-    labelString: "Re-enter new password.",
-    placeholderString: "Confirm new password",
-    inputType: "password",
-    buttonString: "Reset Password"
-  };
-
-  //  Create forms
-  const accountSearchFormElement = createForm(
+  //  Create forms using ...rest syntax on the values of data objects
+  const accountSearchFormElement = createInputForm(
     ...Object.values(accountSearchFormData)
   );
-  const recoveryAnswerFormElement = createForm(
+  const recoveryAnswerFormElement = createInputForm(
     ...Object.values(recoveryAnswerFormData)
   );
-  const newPasswordFormElement = createForm(
+  const newPasswordFormElement = createInputForm(
     ...Object.values(newPasswordFormData)
   );
-  const passwordConfirmFormElement = createForm(
+  const passwordConfirmFormElement = createInputForm(
     ...Object.values(passwordConfirmFormData)
   );
 
-  mother.append(accountSearchFormElement);
+  page.append(accountSearchFormElement);
 
   //  Add listers to the forms
   accountSearchFormElement.on("submit", (event) => {
     event.preventDefault();
     $(".alert").hide();
-    const searchForThisEmail = $("#accountSearch-input").val();
-    //  Send email to backend.
-    $.post("/api/passwordRecovery/accountSearch", {
-      email: searchForThisEmail
-    })
-      .then((recoveryQuestion) => {
-        //  "Turn off" the old form
-        $("form.accountSearch button").hide();
-        $("#accountSearch-input").attr("readonly", "true");
-        //  The next two lines must be in this order or the
-        //  recoveryQuestion will not appear in the input label.
-        mother.append(recoveryAnswerFormElement);
-        $("#recoveryAnswer-inputLabel").text(recoveryQuestion);
-      })
-      .catch(handleError);
+    getRecoveryQuestionIfAccountExists();
   });
 
   recoveryAnswerFormElement.on("submit", (event) => {
     event.preventDefault();
     $(".alert").hide();
-    const answerSubmission = $("#recoveryAnswer-input").val().trim();
-    $.post("/api/passwordRecovery/matchAnswer", {
-      email: $("#accountSearch-input").val(),
-      recoveryAnswer: answerSubmission
-    })
-      .then((answerMatch) => {
-        if (answerMatch) {
-          $("#recoveryAnswer-button").hide();
-          $("#recoveryAnswer-input").attr("readonly", "true");
-          newPasswordFormElement.appendTo(mother);
-        }
-      })
-      .catch(handleError);
+    validateUserAnswerAgainstRegisteredRecoveryAnswer();
   });
 
   newPasswordFormElement.on("submit", (event) => {
     event.preventDefault();
     $(".alert").hide();
-    $.post("/api/passwordRecovery/testPasswordRequirements", {
-      potentialPassword: $("#newPassword-input").val().trim()
-    })
-      .then((passwordIsValid) => {
-        console.log("inside .then 166, passwordIsValid = ", passwordIsValid);
-        if (passwordIsValid) {
-          $("#newPassword-button").hide();
-          $("#newPassword-input").attr("readonly", "true");
-          passwordConfirmFormElement.appendTo(mother);
-        }
-      })
-      .catch(handleError);
-    console.log("inside submit event");
+    ensureNewPasswordSatisfiesRequirements();
   });
 
   passwordConfirmFormElement.on("submit", (event) => {
     event.preventDefault();
     $(".alert").hide();
+    validateThatUserTypedSamePasswordTwiceAndStoreNewPasswordIntoDatabase();
+  });
+
+  // definitions for RESTful functions
+  function getRecoveryQuestionIfAccountExists() {
+    const searchForThisAccount = $("#accountSearch-input").val();
+    account = searchForThisAccount;
+    $.post("/api/passwordRecovery/accountSearch", {
+      account: searchForThisAccount
+    })
+      .then((recoveryQuestion) => {
+        renderRecoveryQuestionForm(recoveryQuestion);
+      })
+      .catch(handleError);
+  }
+
+  function validateUserAnswerAgainstRegisteredRecoveryAnswer() {
+    const userAnswer = $("#recoveryAnswer-input").val();
+    $.post("/api/passwordRecovery/validateUserAnswer", {
+      email: account,
+      recoveryAnswer: userAnswer
+    })
+      .then(() => {
+        renderRecoveryAnswerForm();
+      })
+      .catch(handleError);
+  }
+
+  function ensureNewPasswordSatisfiesRequirements() {
+    $.post("/api/passwordRecovery/ensurePasswordRequirements", {
+      potentialPassword: $("#newPassword-input").val()
+    })
+      .then(() => {
+        renderNewPasswordForm();
+      })
+      .catch(handleError);
+  }
+
+  function validateThatUserTypedSamePasswordTwiceAndStoreNewPasswordIntoDatabase() {
     const firstPasswordInputText = $("#newPassword-input").val();
     const secondPasswordInputText = $("#passwordConfirm-input").val();
     $.ajax({
-      url: "/api/passwordRecovery/confirmPassword",
+      url: "/api/passwordRecovery/confirmAndStoreNewPassword",
       method: "PUT",
       data: {
-        email: $("#accountSearch input").val(),
+        email: account,
         password1: firstPasswordInputText,
         password2: secondPasswordInputText
       }
     })
-      .then((result) => {
-        //Password is now update.  What do?  redirect to login
-        $("#passwordConfirm-alertMessage").text("Success!  Password Updated");
-        $("#passwordConfirm-alert")
-          .removeClass("alert-danger")
-          .addClass("alert-success")
-          .fadeIn(500);
-        passwordConfirmFormElement.off();
-        $("#passwordConfirm-button")
-          .text("Login")
-          .click((event) => {
-            event.preventDefault();
-            window.location.href = "/login";
-          });
+      .then(() => {
+        renderSuccessAlertAndLoginButton();
       })
       .catch(handleError);
-  });
+  }
 
+  //  Error handler renders errors sent from the back end on
+  //  using jQuery on the formName to select the right alert
   function handleError(err) {
-    const alertIdSnippet = null || err.responseJSON.class;
-    const alertMessage = null || err.responseJSON.msg;
-    $(`#${alertIdSnippet}-alertMessage`).text(`${alertMessage}`);
-    $(`#${err.responseJSON.class}-alert`).fadeIn(500);
+    const formName = err.responseJSON.formName;
+    const alertMessage = err.responseJSON.msg;
+    $(`#${formName}-alertMessage`).text(`${alertMessage}`);
+    $(`#${formName}-alert`).fadeIn(500);
+  }
+
+  //  DOM manipulation functions
+  function renderRecoveryQuestionForm(recoveryQuestion) {
+    $("#accountSearch-button").hide();
+    $("#accountSearch-input").attr("readonly", "true");
+    recoveryAnswerFormElement.appendTo(page);
+    $("#recoveryAnswer-inputLabel").text(recoveryQuestion);
+    $("#recoveryAnswer-input").focus();
+  }
+
+  function renderRecoveryAnswerForm() {
+    $("#recoveryAnswer-button").hide();
+    $("#recoveryAnswer-input").attr("readonly", "true");
+    newPasswordFormElement.appendTo(page);
+    $("#newPassword-input").focus();
+  }
+
+  function renderNewPasswordForm() {
+    $("#newPassword-button").hide();
+    passwordConfirmFormElement.appendTo(page);
+    $("#passwordConfirm-input").focus();
+  }
+
+  function renderSuccessAlertAndLoginButton() {
+    $("#passwordConfirm-alertMessage").text(" Success!  Password Updated");
+    $("#passwordConfirm-alert")
+      .removeClass("alert-danger")
+      .addClass("alert-success")
+      .fadeIn(500);
+    passwordConfirmFormElement.off();
+    $("#passwordConfirm-button")
+      .text("Login")
+      .click((event) => {
+        event.preventDefault();
+        window.location.href = "/login";
+      });
   }
 });

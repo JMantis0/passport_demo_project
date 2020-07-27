@@ -7,3 +7,7 @@ form.accountSearch {
 .alert {
   white-space: pre-wrap;
 }
+
+label {
+  margin-top: 15px;
+}

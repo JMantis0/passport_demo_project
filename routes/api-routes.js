@@ -9,7 +9,6 @@ module.exports = function (app) {
   // If the user has valid login credentials, send them to the members page.
   // Otherwise the user will be sent an error
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    console.log(req.user);
     res.json(req.user);
   });
 
@@ -53,59 +52,73 @@ module.exports = function (app) {
   });
 
   //  route to handle an update for user's password recovery info
-  app.put("/api/members/passwordRecovery", isAuthenticated, (req, res) => {
-    db.User.update(req.body, {
-      where: {
-        id: req.user.id
+  app.put(
+    "/api/members/setSecurityQuestionAnswer",
+    isAuthenticated,
+    (req, res) => {
+      const match = req.body.recoveryAnswer === req.body.recoveryAnswerRetype;
+      const { recoveryAnswerRetype } = req.body;
+      const regExpQA = new RegExp("^(?=.{6,})");
+      if (!regExpQA.test(recoveryAnswerRetype)) {
+        res.status(400).json({
+          msg: " Answer must be at least 6 characters",
+          formName: "securityQuestionAnswerSetter"
+        });
       }
-    })
-      .then(() => {
-        // send success status back to client
-        res.status(200).send("Password Recovery info Updated");
-      })
-      .catch((err) => {
-        console.log("Error updating Password Recovery info", err);
-        // Send Failure
-        res.status(400).send("Failure");
-      });
-  });
+      if (match) {
+        db.User.update(
+          {
+            recoveryAnswer: bcrypt.hashSync(
+              recoveryAnswerRetype,
+              bcrypt.genSaltSync(10),
+              null
+            )
+          },
+          {
+            where: {
+              id: req.user.id
+            }
+          }
+        )
+          .then(() => {
+            res.sendStatus(200);
+          })
+          .catch((err) => {
+            res.status(400).json(err);
+          });
+      } else {
+        const err = {
+          msg: " Your answers do not match.",
+          formName: "securityQuestionAnswerSetter"
+        };
+        res.status(400).json(err);
+      }
+    }
+  );
 
-  // Route helps unauthenticated user reset a password.
-  // req.body contains an email account string.
-  // req.body.email is used in the sequelize where condition.
-  // then either a recoveryQuestion is sent back to the client
-  // an exception is thrown.
   app.post("/api/passwordRecovery/accountSearch", (req, res) => {
-    console.log("Inside api route /accountSearch");
     db.User.findOne({
       where: {
-        email: req.body.email
+        email: req.body.account
       }
     })
-      .then((accountIfExists) => {
-        let accountExists;
-        if (accountIfExists === null) {
-          accountExists = false;
-        } else {
-          accountExists = true;
-        }
-
-        if (accountExists) {
-          res.status(200).send(accountIfExists.dataValues.recoveryQuestion);
-        } else {
-          throw {
+      .then((accountFound) => {
+        if (accountFound === null) {
+          const err = {
             msg: ` Account does not exist for ${req.body.email}`,
-            class: "accountSearch"
+            formName: "accountSearch"
           };
+          res.status(404).json(err);
+        } else {
+          res.status(200).send(accountFound.dataValues.recoveryQuestion);
         }
       })
       .catch((err) => {
-        console.log(err, "101");
-        res.status(400).json(err);
+        res.status(500).json(err);
       });
   });
 
-  app.post("/api/passwordRecovery/matchAnswer", (req, res) => {
+  app.post("/api/passwordRecovery/validateUserAnswer", (req, res) => {
     db.User.findOne({
       where: {
         email: req.body.email
@@ -114,42 +127,41 @@ module.exports = function (app) {
       .then((user) => {
         const userAnswer = req.body.recoveryAnswer;
         const correctAnswer = user.dataValues.recoveryAnswer;
-        if (userAnswer === correctAnswer) {
-          res.send(userAnswer === correctAnswer);
+        if (bcrypt.compareSync(userAnswer, correctAnswer)) {
+          res.sendStatus(202);
         } else {
-          throw {
+          const err = {
             msg: " Incorrect Answer",
-            class: "recoveryAnswer"
+            formName: "recoveryAnswer"
           };
+          res.status(400).json(err);
         }
       })
       .catch((err) => {
-        res.status(400).json(err);
+        res.status(500).json(err);
       });
   });
 
-  app.post("/api/passwordRecovery/testPasswordRequirements", (req, res) => {
+  app.post("/api/passwordRecovery/ensurePasswordRequirements", (req, res) => {
     //  Regular Expression must contain at least one number, one capital letter, one lowercase letter,
     //  one special character, and have length in range 9-32
     const pwRegEx = new RegExp(
       "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[+!@#$%^&*])(?=.{8,})"
     );
-    console.log("135", pwRegEx, req.body.potentialPassword);
     const passwordPasses = pwRegEx.test(req.body.potentialPassword);
-    console.log("137", passwordPasses);
     if (passwordPasses) {
-      res.status(200).send(passwordPasses);
+      res.sendStatus(200);
     } else {
       const err = {
         msg:
           " Password must have:\n    - minimum 8 characters\n    - one number\n    - one lowercase letter\n    - one uppercase letter\n    - one special-character",
-        class: "newPassword"
+        formName: "newPassword"
       };
       res.status(400).json(err);
     }
   });
 
-  app.put("/api/passwordRecovery/confirmPassword", (req, res) => {
+  app.put("/api/passwordRecovery/confirmAndStoreNewPassword", (req, res) => {
     const match = req.body.password1 === req.body.password2;
     if (match) {
       db.User.update(
@@ -165,14 +177,13 @@ module.exports = function (app) {
             email: req.body.email
           }
         }
-      ).then((result) => {
-        console.log(result, "api routes 161");
-        res.status(202).send(result);
+      ).then(() => {
+        res.sendStatus(202);
       });
     } else {
       const err = {
         msg: " Your new passwords do not match",
-        class: "passwordConfirm"
+        formName: "passwordConfirm"
       };
       res.status(400).json(err);
     }
